@@ -1,0 +1,32 @@
+schema = "gamma-recipe"
+schema_version = 1
+status = "staging"
+
+[package]
+name = "nordix-toolchain"
+version = "0.1.0"
+release = 1
+license = "GPL-3.0-only"
+abi = "norx-userspace-abi-v1"
+architectures = ["x86_64", "aarch64"]
+
+[source]
+kind = "workspace"
+subdir = "toolchain"
+
+[build]
+system = "command"
+command = "python"
+args = ["toolchain/scripts/build.py"]
+network = false
+
+[targets.x86_64]
+triple = "x86_64-unknown-norx"
+
+[targets.aarch64]
+triple = "aarch64-unknown-norx"
+
+[[outputs]]
+name = "nordix-toolchain"
+kind = "sysroot"
+paths = ["sysroot", "targets", "linker", "versions.toml"]

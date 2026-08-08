@@ -1,0 +1,10 @@
+schema = "norx-toolchain-versions"
+version = 1
+
+# Host tools are checked by exact semantic version before a build starts.
+llvm_version = "22.1.7"
+rust_toolchain = "nightly"
+rustc_version = "1.99.0-nightly"
+rustc_commit = "7608eb7b07eaf93f16d7cf5bcb2098eca87503df"
+
+targets = ["x86_64-unknown-norx", "aarch64-unknown-norx"]

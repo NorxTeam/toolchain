@@ -1,0 +1,17 @@
+schema = "nordix-sdk-release"
+version = 1
+sdk_version = "0.1.0"
+release = 1
+abi_schema = "norx-userspace-abi"
+abi_version = 1
+layout = "nordix-sysroot-v1"
+source_date_epoch = 0
+targets = ["x86_64", "aarch64"]
+
+[compatibility]
+object_format = "elf64-little"
+static_link = true
+dynamic_linking = "staged"
+startup_symbol = "_start"
+syscall_abi_version = 1
+minimum_kernel_release = "0.1.0"

@@ -1,0 +1,67 @@
+schema = "norx-userspace-abi"
+version = 1
+object_format = "elf64-little"
+page_size = 4096
+static_link = true
+position_independent_executables = "staged"
+dynamic_linking = "staged"
+
+[syscall]
+abi_version = 1
+word_bits = 64
+pointer_bits = 64
+argument_words = 6
+error_encoding = "uint64_twos_complement_negative_errno"
+number_register_x86_64 = "rax"
+argument_registers_x86_64 = ["rdi", "rsi", "rdx", "r10", "r8", "r9"]
+return_register_x86_64 = "rax"
+number_register_aarch64 = "x8"
+argument_registers_aarch64 = ["x0", "x1", "x2", "x3", "x4", "x5"]
+return_register_aarch64 = "x0"
+
+[startup]
+entry_symbol = "_start"
+source = "norx-owned-freestanding-crt0"
+panic_policy = "abort"
+termination = "norx_exit"
+initial_stack = "argc-argv-envp-auxv"
+auxv = ["AT_PAGESZ", "AT_ENTRY", "AT_NULL"]
+
+[targets.x86_64]
+triple = "x86_64-unknown-norx"
+kernel_triple = "x86_64-unknown-none"
+machine = "EM_X86_64"
+calling_convention = "sysv_amd64"
+stack_alignment = 16
+red_zone = true
+callee_saved = ["rbx", "rbp", "r12", "r13", "r14", "r15"]
+tls_register = "fs_base"
+tls_model = "static_tls_reserved_dynamic_tls_staged"
+atomics = "lock_prefix_integer_64bit_no_128bit_requirement"
+floating_point = "disabled_until_fpu_context_switch"
+isa_baseline = "x86-64"
+feature_policy = "no_mmx_sse_sse2_avx_generation"
+linker_script = "linker/x86_64-norx.ld"
+static_relocations = ["R_X86_64_64", "R_X86_64_PC32", "R_X86_64_PLT32", "R_X86_64_32S"]
+dynamic_relocations_staged = ["R_X86_64_RELATIVE", "R_X86_64_GLOB_DAT", "R_X86_64_JUMP_SLOT"]
+tls_relocations_staged = ["R_X86_64_DTPMOD64", "R_X86_64_DTPOFF64", "R_X86_64_TPOFF64"]
+
+[targets.aarch64]
+triple = "aarch64-unknown-norx"
+kernel_triple = "aarch64-unknown-uefi"
+machine = "EM_AARCH64"
+calling_convention = "aapcs64"
+stack_alignment = 16
+red_zone = false
+callee_saved = ["x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x29"]
+platform_register = "x18_reserved"
+tls_register = "tpidr_el0"
+tls_model = "static_tls_reserved_dynamic_tls_staged"
+atomics = "armv8_llsc_integer_64bit_no_lse_or_128bit_requirement"
+floating_point = "disabled_until_fpu_context_switch"
+isa_baseline = "armv8-a"
+feature_policy = "general_registers_only_no_fp_or_neon_generation"
+linker_script = "linker/aarch64-norx.ld"
+static_relocations = ["R_AARCH64_ABS64", "R_AARCH64_ADR_PREL_PG_HI21", "R_AARCH64_ADD_ABS_LO12_NC", "R_AARCH64_CALL26", "R_AARCH64_JUMP26"]
+dynamic_relocations_staged = ["R_AARCH64_RELATIVE", "R_AARCH64_GLOB_DAT", "R_AARCH64_JUMP_SLOT"]
+tls_relocations_staged = ["R_AARCH64_TLS_TPREL64", "R_AARCH64_TLS_DTPREL64", "R_AARCH64_TLS_DTPMOD64"]
