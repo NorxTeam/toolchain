@@ -108,6 +108,13 @@ target runtime archive. Run `python toolchain/scripts/build-rust-userspace.py`
 after `build-runtime.py`; it builds `core`, `alloc`, and `compiler_builtins`
 offline and stages the no-std Nordix API fixture under the test rootfs.
 
+The first quickinit bootstrap gate is also separate from the host policy tests.
+Run `python toolchain/scripts/build-quickinit.py` after `build-runtime.py`; it
+builds the freestanding quickinit contract ELF for both targets, validates its
+`_start` symbol, and stages the artifact plus hashes under the test rootfs.
+This bootstrap only proves the current write/getpid/wait/exit ABI slice; it is
+not yet the full PID1 supervisor handoff.
+
 ## Versioned SDK/sysroot release
 
 Roadmap 5.1.7 uses [`sdk.toml`](sdk.toml) and
