@@ -95,7 +95,7 @@ and Rust nightly against [`versions.toml`](versions.toml), builds freestanding
 C and Rust fixtures for both custom target specs, links them with the
 architecture linker scripts, validates ELF64 headers and `_start` symbols,
 and copies the tested binaries plus a hash manifest into
-[`../norx-rootfs`](../norx-rootfs). Cargo uses the installed pinned `rust-src`
+[`../test-rootfs`](../test-rootfs). Cargo uses the installed pinned `rust-src`
 with `build-std=core` and `--offline`; no host libc or host headers enter the
 sysroot.
 
@@ -106,7 +106,7 @@ graphical QEMU GDB-stub recipes are in [`debugger.md`](debugger.md).
 The Rust userspace gate is separate because `alloc` must link against the
 target runtime archive. Run `python toolchain/scripts/build-rust-userspace.py`
 after `build-runtime.py`; it builds `core`, `alloc`, and `compiler_builtins`
-offline and stages the no-std Nordix API fixture under the test rootfs.
+offline and stages the no-std userspace API fixture under the test rootfs.
 
 The first quickinit bootstrap gate is also separate from the host policy tests.
 Run `python toolchain/scripts/build-quickinit.py` after `build-runtime.py`; it
@@ -126,7 +126,7 @@ python toolchain/scripts/publish-sdk.py
 ```
 
 The script creates deterministic target-specific archives and
-`norx-rootfs/packages/sdk/index.toml`. Each archive carries its own manifest,
+`test-rootfs/packages/sdk/index.toml`. Each archive carries its own manifest,
 target triple, ABI version, compatibility fields, headers, runtime archives,
 linker/target files, and tested C/C++ fixtures. This is SDK release staging,
 not Gamma installation or `.gpk` publication.

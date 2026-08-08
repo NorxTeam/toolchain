@@ -46,7 +46,7 @@ def main() -> int:
 
     manifest = REPO_ROOT / "userspace" / "rust" / "Cargo.toml"
     build_root = TOOLCHAIN_ROOT / "build" / "rust-userspace"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "norx-rootfs"))
+    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
     results: dict[str, str] = {}
     for target_name, target_info in (
         ("x86_64", abi["targets"]["x86_64"]),
@@ -67,7 +67,7 @@ def main() -> int:
             "--config",
             f'target."{triple}".linker = "{ld_lld.as_posix()}"',
             "--config",
-            f'target."{triple}".rustflags = ["-C", "debuginfo=2", "-L", "native={runtime_archive.parent.as_posix()}", "-l", "static=norxrt", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__nordix_linker_revision=0x{linker_revision}"]',
+            f'target."{triple}".rustflags = ["-C", "debuginfo=2", "-L", "native={runtime_archive.parent.as_posix()}", "-l", "static=norxrt", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__linker_revision=0x{linker_revision}"]',
         ]
         command = [
             *rustup_cargo,
@@ -90,12 +90,14 @@ def main() -> int:
         run(command)
         candidates = [
             path
-            for path in (target_dir / "cargo-target").rglob("nordix-userspace-smoke*")
-            if path.is_file() and path.name in {"nordix-userspace-smoke", "nordix-userspace-smoke.exe"}
+            for path in (target_dir / "cargo-target").rglob("userspace-smoke*")
+            if path.is_file()
+            and path.parent.name == "release"
+            and path.name in {"userspace-smoke", "userspace-smoke.exe"}
         ]
         if len(candidates) != 1:
             raise SystemExit(f"expected one Rust userspace ELF for {target_name}, found {candidates}")
-        artifact = target_dir / "nordix-userspace-smoke.elf"
+        artifact = target_dir / "userspace-smoke.elf"
         copy_checked(candidates[0], artifact)
         report = validate_elf(readobj, artifact)
         symbols = checked_output([str(readobj), "--symbols", str(artifact)])
@@ -106,10 +108,10 @@ def main() -> int:
         copy_checked(artifact, destination)
         results[target_name] = sha256(artifact)
 
-    manifest_dir = rootfs / "var" / "lib" / "nordix-rust"
+    manifest_dir = rootfs / "var" / "lib" / "rust"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     lines = [
-        'schema = "nordix-rust-userspace-build"',
+        'schema = "rust-userspace-build"',
         "version = 1",
         f'rustc_version = "{versions["rustc_version"]}"',
         f'rustc_commit = "{versions["rustc_commit"]}"',

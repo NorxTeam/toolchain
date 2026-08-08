@@ -1,4 +1,4 @@
-schema = "norx-toolchain-versions"
+schema = "toolchain-versions"
 version = 1
 
 # Host tools are checked by exact semantic version before a build starts.

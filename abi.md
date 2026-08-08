@@ -91,7 +91,7 @@ is allowed.
 Userland gets architecture-local scripts
 `linker/x86_64-norx.ld` and `linker/aarch64-norx.ld` assembled by the
 toolchain project. They are separate from the kernel's
-`NorxKernel/linker/x86_64.ld`. The first scripts must:
+`norx-kernel/linker/x86_64.ld`. The first scripts must:
 
 - emit `.text`, `.rodata`, `.data`, `.bss`, `.tdata`, and `.tbss` in that
   order with page-aligned load segments;

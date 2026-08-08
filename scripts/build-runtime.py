@@ -124,7 +124,7 @@ def main() -> int:
             raise SystemExit(f"{tool} is not pinned to LLVM {llvm_version}")
 
     sysroot = TOOLCHAIN_ROOT / "sysroot"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "norx-rootfs"))
+    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
     stage_headers(REPO_ROOT, sysroot, rootfs)
     build_root = TOOLCHAIN_ROOT / "build" / "runtime"
     results: dict[str, dict[str, str]] = {}
@@ -226,10 +226,10 @@ def main() -> int:
             destination = rootfs / ("tests/runtime" if artifact.suffix == ".elf" else "usr/lib") / target_info["triple"] / artifact.name
             copy_checked(artifact, destination)
 
-    manifest_dir = rootfs / "var" / "lib" / "norx-runtime"
+    manifest_dir = rootfs / "var" / "lib" / "runtime"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     lines = [
-        'schema = "norx-runtime-build"',
+        'schema = "runtime-build"',
         "version = 1",
         f'llvm_version = "{llvm_version}"',
         'exceptions = "disabled"',

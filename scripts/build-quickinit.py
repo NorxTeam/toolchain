@@ -46,7 +46,7 @@ def main() -> int:
 
     manifest = REPO_ROOT / "quickinit" / "bootstrap" / "Cargo.toml"
     build_root = TOOLCHAIN_ROOT / "build" / "quickinit"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "norx-rootfs"))
+    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
     results: dict[str, str] = {}
     for target_name, target_info in (
         ("x86_64", abi["targets"]["x86_64"]),
@@ -67,7 +67,7 @@ def main() -> int:
             "--config",
             f'target."{triple}".linker = "{ld_lld.as_posix()}"',
             "--config",
-            f'target."{triple}".rustflags = ["-C", "debuginfo=2", "-L", "native={runtime_archive.parent.as_posix()}", "-l", "static=norxrt", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__nordix_linker_revision=0x{linker_revision}"]',
+            f'target."{triple}".rustflags = ["-C", "debuginfo=2", "-L", "native={runtime_archive.parent.as_posix()}", "-l", "static=norxrt", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__linker_revision=0x{linker_revision}"]',
         ]
         command = [
             *rustup_cargo,
@@ -87,17 +87,19 @@ def main() -> int:
             str(target_dir / "cargo-target"),
             "--release",
             "--bin",
-            "nordix-quickinit",
+            "quickinit",
         ]
         run(command)
         candidates = [
             path
-            for path in (target_dir / "cargo-target").rglob("nordix-quickinit*")
-            if path.is_file() and path.name in {"nordix-quickinit", "nordix-quickinit.exe"}
+            for path in (target_dir / "cargo-target").rglob("quickinit*")
+            if path.is_file()
+            and path.parent.name == "release"
+            and path.name in {"quickinit", "quickinit.exe"}
         ]
         if len(candidates) != 1:
             raise SystemExit(f"expected one quickinit ELF for {target_name}, found {candidates}")
-        artifact = target_dir / "nordix-quickinit.elf"
+        artifact = target_dir / "quickinit.elf"
         copy_checked(candidates[0], artifact)
         report = validate_elf(readobj, artifact)
         symbols = checked_output([str(readobj), "--symbols", str(artifact)])
@@ -108,10 +110,10 @@ def main() -> int:
         copy_checked(artifact, destination)
         results[target_name] = sha256(artifact)
 
-    manifest_dir = rootfs / "var" / "lib" / "nordix-quickinit"
+    manifest_dir = rootfs / "var" / "lib" / "quickinit"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     lines = [
-        'schema = "nordix-quickinit-build"',
+        'schema = "quickinit-build"',
         "version = 1",
         f'rustc_version = "{versions["rustc_version"]}"',
         f'rustc_commit = "{versions["rustc_commit"]}"',

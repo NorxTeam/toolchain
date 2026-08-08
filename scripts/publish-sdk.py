@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create deterministic, target-specific Nordix SDK/sysroot staging archives."""
+"""Create deterministic, target-specific SDK/sysroot staging archives."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import tomllib
 SCRIPT_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_ROOT.parent.parent
 TOOLCHAIN_ROOT = REPO_ROOT / "toolchain"
-ROOTFS = Path(os.environ.get("NORDIX_ROOTFS", REPO_ROOT / "norx-rootfs"))
+ROOTFS = Path(os.environ.get("ROOTFS_PATH", REPO_ROOT / "test-rootfs"))
 SDK_CONFIG = TOOLCHAIN_ROOT / "sdk.toml"
 OUTPUT_ROOT = ROOTFS / "packages" / "sdk"
 
@@ -55,7 +55,7 @@ def toml_string(value: str) -> str:
 
 def manifest_text(config: dict, target_name: str, triple: str, entries: list[dict]) -> str:
     lines = [
-        'schema = "nordix-sdk-manifest"',
+        'schema = "sdk-manifest"',
         "version = 1",
         f"sdk_version = {toml_string(config['sdk_version'])}",
         f"release = {config['release']}",
@@ -124,7 +124,7 @@ def publish_target(config: dict, target_name: str, abi: dict) -> dict:
         for source, destination in sorted(source_files, key=lambda item: item[1])
     ]
     manifest = manifest_text(config, target_name, triple, entries)
-    artifact_name = f"nordix-sdk-{config['sdk_version']}-r{config['release']}-{target_name}.tar"
+    artifact_name = f"sdk-{config['sdk_version']}-r{config['release']}-{target_name}.tar"
     artifact = OUTPUT_ROOT / artifact_name
     artifact.parent.mkdir(parents=True, exist_ok=True)
     epoch = int(config.get("source_date_epoch", 0))
@@ -147,7 +147,7 @@ def main() -> int:
     abi = read_toml(TOOLCHAIN_ROOT / "abi.toml")
     artifacts = [publish_target(config, target, abi) for target in config["targets"]]
     index_lines = [
-        'schema = "nordix-sdk-index"',
+        'schema = "sdk-index"',
         "version = 1",
         f"sdk_version = {toml_string(config['sdk_version'])}",
         f"release = {config['release']}",

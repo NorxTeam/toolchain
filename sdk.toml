@@ -1,10 +1,10 @@
-schema = "nordix-sdk-release"
+schema = "sdk-release"
 version = 1
 sdk_version = "0.1.0"
 release = 1
 abi_schema = "norx-userspace-abi"
 abi_version = 1
-layout = "nordix-sysroot-v1"
+layout = "sysroot-v1"
 source_date_epoch = 0
 targets = ["x86_64", "aarch64"]
 

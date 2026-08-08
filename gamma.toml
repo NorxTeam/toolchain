@@ -3,7 +3,7 @@ schema_version = 1
 status = "staging"
 
 [package]
-name = "nordix-toolchain"
+name = "toolchain"
 version = "0.1.0"
 release = 1
 license = "GPL-3.0-only"
@@ -27,6 +27,6 @@ triple = "x86_64-unknown-norx"
 triple = "aarch64-unknown-norx"
 
 [[outputs]]
-name = "nordix-toolchain"
+name = "toolchain"
 kind = "sysroot"
 paths = ["sysroot", "targets", "linker", "versions.toml"]

@@ -1,4 +1,4 @@
-# Nordix SDK compatibility
+# SDK compatibility
 
 The SDK release manifest is [`sdk.toml`](sdk.toml). A consumer must select an
 exact target triple and verify the embedded `norx-userspace-abi` version before

@@ -178,7 +178,7 @@ def build_target(
         "--config",
         f'target."{target_triple}".linker = "{ld_lld.as_posix()}"',
         "--config",
-        f'target."{target_triple}".rustflags = ["-C", "debuginfo=2", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__nordix_linker_revision=0x{linker_revision}"]',
+        f'target."{target_triple}".rustflags = ["-C", "debuginfo=2", "-C", "link-arg=-T{linker_script.as_posix()}", "-C", "link-arg=-m{target_emulation(target_name)}", "-C", "link-arg=--defsym=__linker_revision=0x{linker_revision}"]',
     ]
     cargo_command_line = [
         *cargo,
@@ -262,7 +262,7 @@ def main() -> int:
     canonical_header = REPO_ROOT / "userspace" / "include" / "norx" / "syscall.h"
     canonical_stdint = REPO_ROOT / "userspace" / "include" / "stdint.h"
     copy_checked(canonical_header, sysroot / "include" / "norx" / "syscall.h")
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "norx-rootfs"))
+    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
     copy_checked(canonical_header, rootfs / "usr" / "include" / "norx" / "syscall.h")
     copy_checked(canonical_stdint, sysroot / "include" / "stdint.h")
     copy_checked(canonical_stdint, rootfs / "usr" / "include" / "stdint.h")
@@ -291,10 +291,10 @@ def main() -> int:
                 rootfs / "tests" / "toolchain" / target_name / artifact.name,
             )
 
-    manifest_dir = rootfs / "var" / "lib" / "norx-toolchain"
+    manifest_dir = rootfs / "var" / "lib" / "toolchain"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     manifest_lines = [
-        'schema = "norx-toolchain-build"',
+        'schema = "toolchain-build"',
         "version = 1",
         f'llvm_version = "{llvm_version}"',
         f'rustc_version = "{versions["rustc_version"]}"',
