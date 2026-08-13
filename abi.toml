@@ -1,5 +1,5 @@
 schema = "norx-userspace-abi"
-version = 1
+version = 2
 object_format = "elf64-little"
 page_size = 4096
 static_link = true
@@ -7,7 +7,7 @@ position_independent_executables = "staged"
 dynamic_linking = "staged"
 
 [syscall]
-abi_version = 1
+abi_version = 2
 word_bits = 64
 pointer_bits = 64
 argument_words = 6

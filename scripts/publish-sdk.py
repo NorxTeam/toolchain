@@ -104,7 +104,7 @@ def publish_target(config: dict, target_name: str, abi: dict) -> dict:
     target_info = abi["targets"][target_name]
     triple = target_info["triple"]
     source_files: list[tuple[Path, str]] = []
-    source_files.extend(files_under(TOOLCHAIN_ROOT / "sysroot" / "include", "sysroot/include"))
+    source_files.extend(files_under(TOOLCHAIN_ROOT / "build" / "sysroot" / "include", "sysroot/include"))
     source_files.extend(files_under(ROOTFS / "usr" / "lib" / triple, f"sysroot/lib/{triple}"))
     source_files.extend(files_under(ROOTFS / "tests" / "runtime" / triple, f"tests/runtime/{triple}"))
     source_files.extend(

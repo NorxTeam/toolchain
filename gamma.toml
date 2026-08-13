@@ -7,7 +7,7 @@ name = "toolchain"
 version = "0.1.0"
 release = 1
 license = "GPL-3.0-only"
-abi = "norx-userspace-abi-v1"
+abi = "norx-userspace-abi-v2"
 architectures = ["x86_64", "aarch64"]
 
 [source]
@@ -29,4 +29,4 @@ triple = "aarch64-unknown-norx"
 [[outputs]]
 name = "toolchain"
 kind = "sysroot"
-paths = ["sysroot", "targets", "linker", "versions.toml"]
+paths = ["build/sysroot", "targets", "linker", "versions.toml"]

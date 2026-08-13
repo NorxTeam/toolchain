@@ -45,9 +45,9 @@ Rust function calls.
 - Floating-point/SIMD arguments are excluded from the initial profile until
   the scheduler and user entry path save and restore that state.
 
-## Syscall ABI v1
+## Syscall ABI v2
 
-The published boundary is `NORX_ABI_VERSION == 1` in
+The published boundary is `NORX_ABI_VERSION == 2` in
 `userspace/include/norx/syscall.h` and `src/syscall.rs`:
 
 - every call has a 64-bit number, six 64-bit logical argument words, and a
@@ -59,9 +59,17 @@ The published boundary is `NORX_ABI_VERSION == 1` in
 - success returns a non-negative word; failure returns the unsigned
   two's-complement representation of `-errno` (currently errors are bounded
   to the Linux-compatible range below 4096);
-- `read` and `write` are reserved entries and return `-ENOSYS` until real
-  process-owned user buffers and pinning are available. They must not fall
-  back to host I/O.
+- `read` and `write` are bounded process-owned user-buffer operations. `read`
+  currently polls the nonblocking serial console for fd 0 and returns
+  `-EAGAIN` when no byte is available; `write` sends fd 1/2 through the
+  kernel console. They must not fall back to host I/O.
+- v2 retains the v1 process-I/O extension calls `open`, `pipe`, `dup2`,
+  `wait_status`, `spawn2`, process-group control, and serial-TTY foreground
+  control, and adds bounded `mkdir`, `rmdir`, `unlink`, `rename`, `link`,
+  `stat`, and `read_dir` calls. `spawn2` copies bounded UTF-8 argv and
+  environment vectors into the child startup stack. Directory entries and
+  metadata are fixed-size, regular-file/directory-only records; symlink nodes,
+  locale collation, and host filesystem fallback are not implied.
 
 `Args` is `#[repr(C)]`, 48 bytes, 8-byte aligned. `Timespec` is two signed
 64-bit fields, 16 bytes, with no hidden padding contract beyond the C layout.
@@ -114,7 +122,7 @@ and the listed TLS relocations are staged dynamic-linker work.
   cannot claim a complete TLS ABI before process context ownership exists.
 - Integer atomics are required up to 64 bits. x86_64 uses locked integer
   operations; AArch64 uses ARMv8 LL/SC. 128-bit atomics, lock-free guarantees
-  beyond that set, and device memory atomics are not part of v1.
+  beyond that set, and device memory atomics are not part of v2.
 - The initial userland profile has no compiler-generated MMX/SSE/AVX or
   FP/NEON state. C builds use the target's general-register-only profile and
   Rust builds disable the corresponding target features. A later hard-float

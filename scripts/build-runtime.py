@@ -20,6 +20,7 @@ from build import (  # noqa: E402
     copy_checked,
     load_toml,
     run,
+    stage_userspace_headers,
     target_emulation,
     target_flags,
     tool_path,
@@ -29,17 +30,6 @@ from build import (  # noqa: E402
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def stage_headers(root: Path, sysroot: Path, rootfs: Path) -> None:
-    sources = [REPO_ROOT / "userspace" / "include", REPO_ROOT / "userspace" / "runtime" / "include"]
-    for source_root in sources:
-        for source in source_root.rglob("*"):
-            if not source.is_file():
-                continue
-            relative = source.relative_to(source_root)
-            copy_checked(source, sysroot / "include" / relative)
-            copy_checked(source, rootfs / "usr" / "include" / relative)
 
 
 def compile_common(target_info: dict, target_name: str, sysroot: Path) -> list[str]:
@@ -123,9 +113,9 @@ def main() -> int:
         if llvm_version not in checked_output([str(tool), "--version"]):
             raise SystemExit(f"{tool} is not pinned to LLVM {llvm_version}")
 
-    sysroot = TOOLCHAIN_ROOT / "sysroot"
+    sysroot = TOOLCHAIN_ROOT / "build" / "sysroot"
     rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
-    stage_headers(REPO_ROOT, sysroot, rootfs)
+    stage_userspace_headers(sysroot, rootfs)
     build_root = TOOLCHAIN_ROOT / "build" / "runtime"
     results: dict[str, dict[str, str]] = {}
 

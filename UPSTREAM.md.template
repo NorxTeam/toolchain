@@ -1,0 +1,84 @@
+# Upstream provenance: <project>
+
+Copy this file to `UPSTREAM.md` at the root of a maintained external-project
+fork. Do not fill it with guessed values: the baseline must be an immutable
+upstream commit recorded after the fork is created.
+
+## Identity
+
+| Field | Value |
+| --- | --- |
+| Norx repository/package | `<name>` |
+| Upstream URL | `<canonical Git URL>` |
+| Norx fork URL | `<Norx fork URL>` |
+| Required remote name | `upstream` |
+| Norx push remote | `<origin/fork URL>` |
+| Upstream baseline tag | `<tag or none>` |
+| Upstream baseline commit | `<full 40-character commit>` |
+| Imported at | `<UTC date>` |
+| Last synchronized commit | `<UTC date and commit>` |
+
+The `upstream` remote must remain configured in the fork. The baseline tag and
+commit must exist locally; do not replace the upstream history with a source
+archive or a generated snapshot.
+
+## Preserved notices and obligations
+
+| Field | Value |
+| --- | --- |
+| SPDX expression | `<SPDX expression>` |
+| Retained license files | `<LICENSE/COPYING paths>` |
+| Retained notice files | `<NOTICE/third-party paths>` |
+| Copyright headers changed? | `<no, or legal review reference>` |
+| Trademark obligations | `<summary or none found>` |
+| Distribution obligations | `<source/notice/offer requirements>` |
+
+All upstream license, copyright, attribution, and notice files remain in the
+fork unless a documented legal review authorizes a change. Norx package names,
+icons, and product branding must not imply permission to use an upstream mark.
+
+## Norx patch queue
+
+| Order | Patch/commit | Purpose | Upstream status | Removal condition |
+| ---: | --- | --- | --- | --- |
+| 1 | `<commit or patches/0001-...>` | `<one-line purpose>` | `<submitted/accepted/rejected/Norx-only>` | `<condition>` |
+
+Keep Norx changes on `norx/<target-branch>` or in the ordered `patches/`
+series. Each patch must list the affected targets, build options, reduced or
+host test, QEMU test (when applicable), and upstream issue/PR reference. Do not
+mix generated files or unrelated formatting with a port patch.
+
+## Build and generated artifacts
+
+| Field | Value |
+| --- | --- |
+| Gamma recipe | `<path>` |
+| Build profile/options | `<exact options and environment>` |
+| Supported targets | `<exact target triples>` |
+| Offline/network policy | `<offline or approved source URLs>` |
+| Manifest path | `<generated manifest path>` |
+| Hash algorithm | `SHA-256` |
+| Artifact hash scope | `<paths or release manifest>` |
+
+Build output is generated and ignored. The manifest records artifact paths,
+sizes, hashes, target, upstream baseline, patch-series revision, and ABI/SDK
+versions; it is evidence of a reproducible build, not a replacement for the
+source and preserved upstream history.
+
+## Sync record
+
+```text
+sync_date_utc: <date>
+old_upstream_commit: <full commit>
+new_upstream_commit: <full commit>
+patch_rebase_result: <clean/conflicts; reference review>
+host_tests: <command and result>
+target_tests: <command and result>
+qemu_smoke: <command and result, or N/A with reason>
+last_known_good: <commit and artifact manifest>
+rollback_revision: <commit/tag>
+```
+
+A sync is incomplete until the patch queue reapplies cleanly, notices and
+licenses are rechecked, all supported targets pass, and the previous
+last-known-good revision remains available for rollback.

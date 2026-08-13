@@ -1,0 +1,68 @@
+name: Source boundaries
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out toolchain
+        uses: actions/checkout@v4
+        with:
+          path: toolchain
+
+      - name: Check out canonical userspace
+        uses: actions/checkout@v4
+        with:
+          repository: NorxTeam/userspace
+          path: userspace
+
+      - name: Check out rootfs staging
+        uses: actions/checkout@v4
+        with:
+          repository: NorxTeam/NordixRootfs
+          path: test-rootfs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run source-boundary tests
+        run: python -m unittest discover -s toolchain/tests -p 'test_*.py'
+
+      - name: Stage headers and publish SDK smoke archives
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path("toolchain/scripts").resolve()))
+          from build import stage_userspace_headers
+
+          toolchain = Path("toolchain")
+          rootfs = Path("test-rootfs")
+          stage_userspace_headers(toolchain / "build" / "sysroot", rootfs)
+          for triple in ("x86_64-unknown-norx", "aarch64-unknown-norx"):
+              for relative in (
+                  Path("usr/lib") / triple / "libnorxrt.a",
+                  Path("tests/runtime") / triple / "runtime.elf",
+              ):
+                  output = rootfs / relative
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  output.write_bytes(b"header-boundary-smoke\n")
+          PY
+          python toolchain/scripts/publish-sdk.py
+
+      - name: Check tracked files, generated sysroot, and published SDK headers
+        run: >-
+          python toolchain/scripts/check_boundaries.py
+          --toolchain-root toolchain
+          --userspace-root userspace
+          --rootfs-root test-rootfs
+          --require-sdk

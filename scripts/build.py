@@ -89,6 +89,19 @@ def copy_checked(source: Path, destination: Path) -> None:
         raise SystemExit(f"copied file differs: {source} -> {destination}")
 
 
+def stage_userspace_headers(sysroot: Path, rootfs: Path) -> None:
+    for source_root in (
+        REPO_ROOT / "userspace" / "include",
+        REPO_ROOT / "userspace" / "runtime" / "include",
+    ):
+        for source in source_root.rglob("*"):
+            if not source.is_file():
+                continue
+            relative = source.relative_to(source_root)
+            copy_checked(source, sysroot / "include" / relative)
+            copy_checked(source, rootfs / "usr" / "include" / relative)
+
+
 def validate_elf(readobj: Path, artifact: Path) -> str:
     report = checked_output(
         [str(readobj), "--file-headers", "--sections", "--program-headers", str(artifact)]
@@ -258,14 +271,9 @@ def main() -> int:
     if versions["rustc_version"] not in rust_version or versions["rustc_commit"] not in rust_version:
         raise SystemExit(f"rustc does not match toolchain pin:\n{rust_version}")
 
-    sysroot = TOOLCHAIN_ROOT / "sysroot"
-    canonical_header = REPO_ROOT / "userspace" / "include" / "norx" / "syscall.h"
-    canonical_stdint = REPO_ROOT / "userspace" / "include" / "stdint.h"
-    copy_checked(canonical_header, sysroot / "include" / "norx" / "syscall.h")
+    sysroot = TOOLCHAIN_ROOT / "build" / "sysroot"
     rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
-    copy_checked(canonical_header, rootfs / "usr" / "include" / "norx" / "syscall.h")
-    copy_checked(canonical_stdint, sysroot / "include" / "stdint.h")
-    copy_checked(canonical_stdint, rootfs / "usr" / "include" / "stdint.h")
+    stage_userspace_headers(sysroot, rootfs)
 
     args.out.mkdir(parents=True, exist_ok=True)
     results = {}

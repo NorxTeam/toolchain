@@ -1,18 +1,35 @@
-# Norx toolchain strategy
+# Norx toolchain and SDK assembly
 
-Status: decision for Roadmap 5.1.1. This project deliberately starts as a
-small, reproducible configuration and sysroot project. It is not a fork of a
-compiler and it does not claim that a userspace C library or `std` is ready.
+This repository owns how Norx userspace is built and released. It is a small,
+reproducible configuration and SDK assembly project, not a fork of a compiler.
+Userspace source code lives in [`../userspace/`](../userspace/); this repository
+must not grow a second copy of its headers or runtime sources.
 
 The staging package recipe is [`gamma.toml`](gamma.toml). It contains no host
 paths and records the target-aware command that assembles the reproducible
 sysroot and fixture outputs.
 
+## Repository layout
+
+- `targets/` — Norx target specifications consumed by Rust and LLVM tools.
+- `linker/` — architecture-specific linker scripts.
+- `scripts/` — version checks, header staging, runtime builds, fixture builds,
+  and SDK publication.
+- `fixtures/` — toolchain-only C/Rust compiler and linker smoke sources.
+- `abi.toml`, `abi.md`, `versions.toml`, `sdk.toml` — target contract, pinned
+  host-tool versions, and SDK release metadata.
+- `build/` — ignored generated output, including `build/sysroot/`; it is
+  recreated from `userspace/` and never committed.
+
+The ownership rule is simple: `userspace/` answers “what is linked into a
+program?”, while `toolchain/` answers “how is that program built for Norx?”.
+
 ## Decision
 
 Use upstream LLVM/Clang/lld and upstream Rust nightly as the initial compiler
-base. Keep Norx-specific behavior in target descriptions, linker scripts,
-startup objects, headers, runtimes, and build manifests under this project.
+base. Keep target descriptions, linker scripts, version pins, and build
+manifests under this project; keep startup objects, headers, runtimes, and the
+Rust userspace API in `../userspace/`.
 Create a maintained compiler fork only if an upstream target or ABI defect is
 demonstrated by a reduced test case and cannot be fixed through a target file,
 linker option, runtime shim, or an accepted upstream change.
@@ -33,11 +50,11 @@ the image.
 | GNU binutils compatibility tools | Upstream, only where required by a build | Target-prefixed wrapper names and version checks | Optional; never make host binutils output part of the ABI |
 | Rust compiler and LLVM backend | Upstream Rust nightly | Custom target specifications, linker integration, panic policy, and `core`/`alloc` build manifests | No rustc fork; upstream issue or local target spec first |
 | `compiler_builtins` | Upstream crate | `no_std` feature selection and target build flags | No patch unless a reduced target failure is accepted upstream or isolated here |
-| C startup and termination | Norx-owned freestanding objects | `_start`, syscall entry glue, `exit`, stack alignment, and early relocation setup | Local source; never borrow host `crt1`/`crti`/`crtn` |
-| C headers and syscall wrappers | Norx-owned | Versioned `norx/syscall.h` and freestanding type definitions | Local source reviewed against `userspace/include/norx/syscall.h` |
+| C startup and termination | `../userspace/runtime` | `_start`, syscall entry glue, `exit`, stack alignment, and early relocation setup | Local source; never borrow host `crt1`/`crti`/`crtn` |
+| C headers and syscall wrappers | `../userspace/include` and `../userspace/runtime/include` | Versioned `norx/syscall.h` and freestanding type definitions | Local source; the generated sysroot is only a build copy |
 | libc/libm and allocator | Norx-owned later | Small supported subset only after process, VFS, memory, and syscall contracts | Do not import host libc; use a maintained upstream base only after scope is explicit |
 | C++ ABI and runtime | Deferred | A separately scoped `libsupc++`/exception policy if C++ is admitted | No exceptions/unwind by default; no host `libstdc++` leakage |
-| Rust `core`/`alloc` userspace layer | Upstream crates plus Norx-owned API crate | Panic handler, allocator boundary, syscall wrappers, and feature gates | No `std` until the userspace ABI and filesystem/process lifecycle pass smoke |
+| Rust `core`/`alloc` userspace layer | Upstream crates plus `../userspace/rust` | Panic handler, allocator boundary, syscall wrappers, and feature gates | No `std` until the userspace ABI and filesystem/process lifecycle pass smoke |
 | Debugger support | Upstream GDB/LLDB where usable | Target description, symbols, and QEMU launch recipes | No debugger fork; target scripts remain data/configuration |
 | Build orchestration | Norx-owned scripts and CI | Version checks, isolated host/target paths, sysroot assembly, and artifact manifest | Scripts may fail closed on mixed host/target inputs |
 
@@ -47,8 +64,9 @@ implemented by this decision.
 
 ## Boundary rules
 
-1. Host tools run on the host; target headers, startup objects, libraries, and
-   linker scripts come only from the Norx sysroot.
+1. Host tools run on the host; target headers and runtime sources come from
+   `../userspace/`, while target specs and linker scripts come from this
+   repository. The generated combination is `build/sysroot/`.
 2. The first C and Rust user programs are freestanding and statically linked.
    Dynamic linking, TLS, unwinding, and `std` are separate gates.
 3. The toolchain consumes the versioned syscall ABI from
@@ -130,3 +148,22 @@ The script creates deterministic target-specific archives and
 target triple, ABI version, compatibility fields, headers, runtime archives,
 linker/target files, and tested C/C++ fixtures. This is SDK release staging,
 not Gamma installation or `.gpk` publication.
+
+## Source-boundary CI guard
+
+Run `python scripts/check_boundaries.py` after SDK publication (use
+`--require-sdk` in a release job). The guard rejects tracked `build/` and
+`sysroot/` paths, checks the staged `test-rootfs/usr/include` tree, and compares
+every `sysroot/include/*` member in each published SDK archive with the
+canonical headers under `../userspace/`. The stdlib-only regression checks run
+with `python -m unittest discover -s tests -p 'test_*.py'`.
+
+The complete cross-repository dependency graph and release hand-off is in
+[`release-flow.md`](release-flow.md). It is the required reading before adding
+another language runtime or changing the SDK contents.
+
+External ports follow [`upstream-policy.md`](upstream-policy.md), including
+the preserved remote/tag/license boundary and the reviewable Norx patch queue.
+Start each maintained external fork from
+[`UPSTREAM.md.template`](UPSTREAM.md.template); never invent provenance for a
+repository that has not yet been forked.
