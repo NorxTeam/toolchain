@@ -180,6 +180,25 @@ def main() -> int:
             libraries=[libc_archive],
         )
 
+        spawn2_smoke_object = target_dir / "obj" / "spawn2_smoke.o"
+        spawn2_compile = [str(clang), *common]
+        if target_name == "x86_64":
+            spawn2_compile.append("-mcmodel=large")
+        compile_source(
+            [*spawn2_compile, "-std=c11", "-g"],
+            REPO_ROOT / "userspace" / "examples" / "spawn2_smoke.c",
+            spawn2_smoke_object,
+        )
+        spawn2_smoke = target_dir / "spawn2-smoke.elf"
+        link_fixture(
+            ld_lld=ld_lld,
+            target_name=target_name,
+            linker_script=TOOLCHAIN_ROOT / target_info["linker_script"],
+            output=spawn2_smoke,
+            objects=[startup_object, spawn2_smoke_object],
+            libraries=[libc_archive],
+        )
+
         cxx_smoke_object = target_dir / "obj" / "cxx_smoke.o"
         compile_source(
             [str(clangxx), *common, "-std=c++17", "-fno-exceptions", "-fno-rtti", "-g"],
@@ -204,15 +223,16 @@ def main() -> int:
             sysroot,
             target_dir / "libm-reject.stderr.txt",
         )
-        for artifact in (libc_archive, cxx_archive, c_smoke, cxx_smoke):
+        for artifact in (libc_archive, cxx_archive, c_smoke, cxx_smoke, spawn2_smoke):
             validate_elf(readobj, artifact) if artifact.suffix == ".elf" else None
         results[target_name] = {
             "libc_sha256": sha256(libc_archive),
             "cxx_sha256": sha256(cxx_archive),
             "c_sha256": sha256(c_smoke),
             "cxx_smoke_sha256": sha256(cxx_smoke),
+            "spawn2_smoke_sha256": sha256(spawn2_smoke),
         }
-        for artifact in (libc_archive, cxx_archive, c_smoke, cxx_smoke):
+        for artifact in (libc_archive, cxx_archive, c_smoke, cxx_smoke, spawn2_smoke):
             destination = rootfs / ("tests/runtime" if artifact.suffix == ".elf" else "usr/lib") / target_info["triple"] / artifact.name
             copy_checked(artifact, destination)
 
