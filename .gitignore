@@ -1,6 +1,9 @@
 # Reproducible build output
 /build/
 
+# Host-specific, reviewed tool identities; keep only the example in Git.
+/toolchain-pins.toml
+
 # Python cache
 __pycache__/
 *.pyc

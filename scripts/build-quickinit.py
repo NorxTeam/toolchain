@@ -13,11 +13,19 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 from build import (  # noqa: E402
     REPO_ROOT,
     TOOLCHAIN_ROOT,
+    atomic_write_text,
     cargo_command,
     checked_output,
+    confined_rootfs,
     copy_checked,
+    ensure_directory,
+    load_tool_pins,
     load_toml,
+    require_llvm_version,
+    require_rust_version,
+    require_start_symbol,
     run,
+    rust_command,
     target_emulation,
     tool_path,
     validate_elf,
@@ -31,29 +39,25 @@ def sha256(path: Path) -> str:
 def main() -> int:
     versions = load_toml(TOOLCHAIN_ROOT / "versions.toml")
     abi = load_toml(TOOLCHAIN_ROOT / "abi.toml")
+    pins = load_tool_pins()
     llvm_version = versions["llvm_version"]
     rust_toolchain = versions["rust_toolchain"]
-    rustup_cargo = cargo_command(rust_toolchain)
-    rust_version = checked_output([*rustup_cargo[:-1], "rustc", "-Vv"])
-    if versions["rustc_version"] not in rust_version or versions["rustc_commit"] not in rust_version:
-        raise SystemExit(f"rustc does not match the pinned quickinit toolchain:\n{rust_version}")
-    ld_lld = tool_path("ld.lld.exe" if os.name == "nt" else "ld.lld", "NORX_LD_LLD")
-    readobj = tool_path(
-        "llvm-readobj.exe" if os.name == "nt" else "llvm-readobj", "NORX_LLVM_READOBJ"
-    )
-    if llvm_version not in checked_output([str(ld_lld), "--version"]):
-        raise SystemExit(f"{ld_lld} is not pinned to LLVM {llvm_version}")
+    rustup_cargo = cargo_command(rust_toolchain, pins)
+    require_rust_version(rust_command(rust_toolchain, pins), versions)
+    ld_lld = tool_path("ld_lld", "NORX_LD_LLD", pins)
+    readobj = tool_path("llvm_readobj", "NORX_LLVM_READOBJ", pins)
+    require_llvm_version(ld_lld, llvm_version)
 
     manifest = REPO_ROOT / "quickinit" / "bootstrap" / "Cargo.toml"
     build_root = TOOLCHAIN_ROOT / "build" / "quickinit"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
+    rootfs = confined_rootfs(os.environ.get("NORX_ROOTFS"))
     results: dict[str, str] = {}
     for target_name, target_info in (
         ("x86_64", abi["targets"]["x86_64"]),
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name
-        target_dir.mkdir(parents=True, exist_ok=True)
+        ensure_directory(target_dir)
         linker_script = TOOLCHAIN_ROOT / target_info["linker_script"]
         target_spec = TOOLCHAIN_ROOT / "targets" / f"{target_name}-unknown-norx.json"
         triple = target_info["triple"]
@@ -93,7 +97,7 @@ def main() -> int:
         candidates = [
             path
             for path in (target_dir / "cargo-target").rglob("quickinit*")
-            if path.is_file()
+            if path.is_file() and not path.is_symlink()
             and path.parent.name == "release"
             and path.name in {"quickinit", "quickinit.exe"}
         ]
@@ -101,17 +105,16 @@ def main() -> int:
             raise SystemExit(f"expected one quickinit ELF for {target_name}, found {candidates}")
         artifact = target_dir / "quickinit.elf"
         copy_checked(candidates[0], artifact)
-        report = validate_elf(readobj, artifact)
+        report = validate_elf(readobj, artifact, target_info)
         symbols = checked_output([str(readobj), "--symbols", str(artifact)])
-        if "_start" not in symbols:
-            raise SystemExit(f"quickinit artifact has no _start entry for {target_name}")
-        (target_dir / "readobj.txt").write_text(report, encoding="utf-8")
+        require_start_symbol(symbols, artifact)
+        atomic_write_text(target_dir / "readobj.txt", report)
         destination = rootfs / "tests" / "quickinit" / triple / artifact.name
         copy_checked(artifact, destination)
         results[target_name] = sha256(artifact)
 
-    manifest_dir = rootfs / "var" / "lib" / "quickinit"
-    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest_dir = rootfs / "var" / "lib" / "nordix-quickinit"
+    ensure_directory(manifest_dir)
     lines = [
         'schema = "quickinit-build"',
         "version = 1",
@@ -125,7 +128,7 @@ def main() -> int:
     for target_name, digest in results.items():
         lines.extend([f"[targets.{target_name}]", f'quickinit_sha256 = "{digest}"', ""])
     manifest_path = manifest_dir / "manifest.toml"
-    manifest_path.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(manifest_path, "\n".join(lines))
     print(f"quickinit bootstrap build passed; manifest: {manifest_path}")
     return 0
 

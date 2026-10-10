@@ -13,11 +13,19 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 from build import (  # noqa: E402
     REPO_ROOT,
     TOOLCHAIN_ROOT,
+    atomic_write_text,
     cargo_command,
     checked_output,
+    confined_rootfs,
     copy_checked,
+    ensure_directory,
+    load_tool_pins,
     load_toml,
+    require_llvm_version,
+    require_rust_version,
+    require_start_symbol,
     run,
+    rust_command,
     target_emulation,
     tool_path,
     validate_elf,
@@ -31,24 +39,20 @@ def sha256(path: Path) -> str:
 def main() -> int:
     versions = load_toml(TOOLCHAIN_ROOT / "versions.toml")
     abi = load_toml(TOOLCHAIN_ROOT / "abi.toml")
+    pins = load_tool_pins()
     llvm_version = versions["llvm_version"]
     rust_toolchain = versions["rust_toolchain"]
-    rustup_cargo = cargo_command(rust_toolchain)
-    rust_version = checked_output([*rustup_cargo[:-1], "rustc", "-Vv"])
-    if versions["rustc_version"] not in rust_version or versions["rustc_commit"] not in rust_version:
-        raise SystemExit(f"rustc does not match the pinned userspace toolchain:\n{rust_version}")
-    ld_lld = tool_path("ld.lld.exe" if os.name == "nt" else "ld.lld", "NORX_LD_LLD")
-    readobj = tool_path(
-        "llvm-readobj.exe" if os.name == "nt" else "llvm-readobj", "NORX_LLVM_READOBJ"
-    )
-    if llvm_version not in checked_output([str(ld_lld), "--version"]):
-        raise SystemExit(f"{ld_lld} is not pinned to LLVM {llvm_version}")
+    rustup_cargo = cargo_command(rust_toolchain, pins)
+    require_rust_version(rust_command(rust_toolchain, pins), versions)
+    ld_lld = tool_path("ld_lld", "NORX_LD_LLD", pins)
+    readobj = tool_path("llvm_readobj", "NORX_LLVM_READOBJ", pins)
+    require_llvm_version(ld_lld, llvm_version)
 
     manifest = REPO_ROOT / "userspace" / "rust" / "Cargo.toml"
     build_root = TOOLCHAIN_ROOT / "build" / "rust-userspace"
     nsh_manifest = REPO_ROOT / "nsh" / "Cargo.toml"
     nsh_build_root = TOOLCHAIN_ROOT / "build" / "nsh"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
+    rootfs = confined_rootfs(os.environ.get("NORX_ROOTFS"))
     results: dict[str, str] = {}
     nsh_results: dict[str, str] = {}
     for target_name, target_info in (
@@ -56,7 +60,7 @@ def main() -> int:
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name
-        target_dir.mkdir(parents=True, exist_ok=True)
+        ensure_directory(target_dir)
         linker_script = TOOLCHAIN_ROOT / target_info["linker_script"]
         target_spec = TOOLCHAIN_ROOT / "targets" / f"{target_name}-unknown-norx.json"
         triple = target_info["triple"]
@@ -94,7 +98,7 @@ def main() -> int:
         candidates = [
             path
             for path in (target_dir / "cargo-target").rglob("userspace-smoke*")
-            if path.is_file()
+            if path.is_file() and not path.is_symlink()
             and path.parent.name == "release"
             and path.name in {"userspace-smoke", "userspace-smoke.exe"}
         ]
@@ -102,17 +106,16 @@ def main() -> int:
             raise SystemExit(f"expected one Rust userspace ELF for {target_name}, found {candidates}")
         artifact = target_dir / "userspace-smoke.elf"
         copy_checked(candidates[0], artifact)
-        report = validate_elf(readobj, artifact)
+        report = validate_elf(readobj, artifact, target_info)
         symbols = checked_output([str(readobj), "--symbols", str(artifact)])
-        if "_start" not in symbols:
-            raise SystemExit(f"Rust userspace artifact has no _start entry for {target_name}")
-        (target_dir / "readobj.txt").write_text(report, encoding="utf-8")
+        require_start_symbol(symbols, artifact)
+        atomic_write_text(target_dir / "readobj.txt", report)
         destination = rootfs / "tests" / "rust" / triple / artifact.name
         copy_checked(artifact, destination)
         results[target_name] = sha256(artifact)
 
         nsh_target_dir = nsh_build_root / target_name
-        nsh_target_dir.mkdir(parents=True, exist_ok=True)
+        ensure_directory(nsh_target_dir)
         nsh_config = [
             "--config",
             f'target."{triple}".linker = "{ld_lld.as_posix()}"',
@@ -145,7 +148,7 @@ def main() -> int:
         nsh_candidates = [
             path
             for path in (nsh_target_dir / "cargo-target").rglob("nsh*")
-            if path.is_file()
+            if path.is_file() and not path.is_symlink()
             and path.parent.name == "release"
             and path.name in {"nsh", "nsh.exe"}
         ]
@@ -153,17 +156,16 @@ def main() -> int:
             raise SystemExit(f"expected one nsh ELF for {target_name}, found {nsh_candidates}")
         nsh_artifact = nsh_target_dir / "nsh.elf"
         copy_checked(nsh_candidates[0], nsh_artifact)
-        nsh_report = validate_elf(readobj, nsh_artifact)
+        nsh_report = validate_elf(readobj, nsh_artifact, target_info)
         nsh_symbols = checked_output([str(readobj), "--symbols", str(nsh_artifact)])
-        if "_start" not in nsh_symbols:
-            raise SystemExit(f"nsh artifact has no _start entry for {target_name}")
-        (nsh_target_dir / "readobj.txt").write_text(nsh_report, encoding="utf-8")
+        require_start_symbol(nsh_symbols, nsh_artifact)
+        atomic_write_text(nsh_target_dir / "readobj.txt", nsh_report)
         nsh_destination = rootfs / "tests" / "nsh" / triple / nsh_artifact.name
         copy_checked(nsh_artifact, nsh_destination)
         nsh_results[target_name] = sha256(nsh_artifact)
 
     manifest_dir = rootfs / "var" / "lib" / "rust"
-    manifest_dir.mkdir(parents=True, exist_ok=True)
+    ensure_directory(manifest_dir)
     lines = [
         'schema = "rust-userspace-build"',
         "version = 1",
@@ -184,7 +186,7 @@ def main() -> int:
             ]
         )
     manifest_path = manifest_dir / "manifest.toml"
-    manifest_path.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(manifest_path, "\n".join(lines))
     print(f"Rust userspace build passed; manifest: {manifest_path}")
     return 0
 

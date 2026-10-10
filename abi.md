@@ -13,10 +13,13 @@ userland binaries.
 | `aarch64-unknown-norx` | `aarch64-unknown-uefi` | `EM_AARCH64` | AAPCS64 | ARMv8-A integer ISA |
 
 Both produce ELF64 little-endian objects with 4 KiB page alignment. The first
-published binaries are statically linked `ET_EXEC` images. `ET_DYN`/PIE and
-shared objects are reserved staged profiles; the relocation lists in
-`abi.toml` are the allowed starting set, not permission to ship a dynamic
-loader before its process and rollback contracts pass.
+published binaries are statically linked `ET_EXEC` images with
+`ELFOSABI_NONE`, zero ELF flags, no `PT_INTERP`, and no `PT_DYNAMIC`. The
+toolchain publisher parses those fields and every `PT_LOAD` directly from the
+artifact; a textual `llvm-readobj` report is retained for debugging only.
+`ET_DYN`/PIE and shared objects are reserved staged profiles; the relocation
+lists in `abi.toml` are the allowed starting set, not permission to ship a
+dynamic loader before its process and rollback contracts pass.
 
 ## Language calling conventions
 
@@ -139,6 +142,7 @@ contract, and the corresponding negative/boot smoke before changing
 
 The current kernel self-checks verify the syscall register boundary, pointer
 validation, ELF stack layout, W+X rejection, and both architecture entry
-wrappers. The next toolchain task must add the actual target specs and linker
-scripts, then compile a freestanding object for each target and compare its
-ELF headers against this definition.
+wrappers. `toolchain/scripts/build.py` additionally rejects malformed or
+oversized ELF files, wrong machine/ABI/address bounds, overlapping or
+misaligned segments, non-file-backed entries, W+X load or executable-stack
+requests, interpreters, and dynamic segments on both targets.

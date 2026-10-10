@@ -109,13 +109,25 @@ version pins and artifact hashes before publishing an SDK or sysroot.
 ## Reproducible smoke toolchain
 
 Roadmap 5.1.3 is implemented by `scripts/build.py`. It checks LLVM/Clang/lld
-and Rust nightly against [`versions.toml`](versions.toml), builds freestanding
-C and Rust fixtures for both custom target specs, links them with the
-architecture linker scripts, validates ELF64 headers and `_start` symbols,
-and copies the tested binaries plus a hash manifest into
+and Rust nightly against [`versions.toml`](versions.toml), after resolving
+every executable through the reviewed host-specific
+[`toolchain-pins.toml`](toolchain-pins.toml.example) policy. Each tool is
+matched by exact realpath and SHA-256 before and during use; `NORX_*` and
+`RUSTC` may only select that already-pinned file. It builds freestanding C and
+Rust fixtures for both custom target specs, links them with the architecture
+linker scripts, parses their ELF bytes directly for the target machine, ABI,
+segments, entry, W^X, and absent interpreter/dynamic linker, and copies the
+tested binaries plus a hash manifest atomically into
 [`../test-rootfs`](../test-rootfs). Cargo uses the installed pinned `rust-src`
 with `build-std=core` and `--offline`; no host libc or host headers enter the
 sysroot.
+
+Before a build, provision `toolchain-pins.toml` from the intended compiler
+installation and review both fields for every tool listed in the example. The
+file is host-specific and ignored by Git; a missing or malformed file fails
+closed instead of falling back to `PATH`. `NORX_ROOTFS` and `--out` are also
+confined to `test-rootfs` and `toolchain/build` respectively, and an existing symlink in any
+published path is rejected.
 
 Run it with `python toolchain/scripts/build.py` from the repository root, or
 use `scripts/build.ps1` / `scripts/build.sh`. Debugger-facing details and the
@@ -167,3 +179,13 @@ the preserved remote/tag/license boundary and the reviewable Norx patch queue.
 Start each maintained external fork from
 [`UPSTREAM.md.template`](UPSTREAM.md.template); never invent provenance for a
 repository that has not yet been forked.
+
+## Build trust boundary checks
+
+Run `python3 scripts/test_build.py` with Python 3.11 or newer. The negative
+corpus covers tool realpath/digest mismatches, malformed ELF images, executable
+permissions, interpreter rejection, symlink publication, and root confinement.
+These host checks stage P1-15; target builds and QEMU remain release gates.
+The pin manifest trusts an administrator-reviewed host installation. Host
+processes able to modify pinned executables between verification and execution
+remain outside this boundary.

@@ -10,13 +10,18 @@ from pathlib import Path
 import tarfile
 from io import BytesIO
 import sys
+import tempfile
 import tomllib
 
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_ROOT.parent.parent
 TOOLCHAIN_ROOT = REPO_ROOT / "toolchain"
-ROOTFS = Path(os.environ.get("ROOTFS_PATH", REPO_ROOT / "test-rootfs"))
+sys.path.insert(0, str(SCRIPT_ROOT))
+from build import confined_rootfs, copy_checked, ensure_directory, atomic_write_text  # noqa: E402
+
+
+ROOTFS = confined_rootfs(os.environ.get("ROOTFS_PATH"))
 SDK_CONFIG = TOOLCHAIN_ROOT / "sdk.toml"
 OUTPUT_ROOT = ROOTFS / "packages" / "sdk"
 
@@ -39,12 +44,15 @@ def files_under(source: Path, prefix: str) -> list[tuple[Path, str]]:
         raise SystemExit(f"missing SDK source directory: {source}")
     return [
         (path, f"{prefix}/{path.relative_to(source).as_posix()}")
-        for path in sorted((entry for entry in source.rglob("*") if entry.is_file()), key=lambda item: item.as_posix())
+        for path in sorted(
+            (entry for entry in source.rglob("*") if entry.is_file() and not entry.is_symlink()),
+            key=lambda item: item.as_posix(),
+        )
     ]
 
 
 def one_file(source: Path, destination: str) -> tuple[Path, str]:
-    if not source.is_file():
+    if not source.is_file() or source.is_symlink():
         raise SystemExit(f"missing SDK source file: {source}")
     return source, destination
 
@@ -126,12 +134,23 @@ def publish_target(config: dict, target_name: str, abi: dict) -> dict:
     manifest = manifest_text(config, target_name, triple, entries)
     artifact_name = f"sdk-{config['sdk_version']}-r{config['release']}-{target_name}.tar"
     artifact = OUTPUT_ROOT / artifact_name
-    artifact.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(artifact.parent)
     epoch = int(config.get("source_date_epoch", 0))
-    with tarfile.open(artifact, mode="w", format=tarfile.PAX_FORMAT) as archive:
-        add_bytes(archive, "manifest.toml", manifest.encode("utf-8"), epoch)
-        for source, destination in sorted(source_files, key=lambda item: item[1]):
-            add_bytes(archive, destination, source.read_bytes(), epoch)
+    with tempfile.NamedTemporaryFile(
+        dir=artifact.parent, prefix=f".{artifact.name}.", suffix=".tmp", delete=False
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        with tarfile.open(temporary_path, mode="w", format=tarfile.PAX_FORMAT) as archive:
+            add_bytes(archive, "manifest.toml", manifest.encode("utf-8"), epoch)
+            for source, destination in sorted(source_files, key=lambda item: item[1]):
+                add_bytes(archive, destination, source.read_bytes(), epoch)
+        copy_checked(temporary_path, artifact)
+    finally:
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
 
     return {
         "name": artifact.name,
@@ -166,7 +185,7 @@ def main() -> int:
             ]
         )
     index = OUTPUT_ROOT / "index.toml"
-    index.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    atomic_write_text(index, "\n".join(index_lines) + "\n")
     print(f"SDK publish passed; index: {index}")
     for artifact in artifacts:
         print(f"{artifact['target']} {artifact['name']} sha256={artifact['sha256']}")

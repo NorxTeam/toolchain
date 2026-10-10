@@ -1,0 +1,42 @@
+schema = "norx-toolchain-pins"
+version = 1
+
+# This file is deliberately host-specific and must be provisioned from the
+# reviewed compiler installation. The build refuses PATH discovery and every
+# NORX_* / RUSTC override unless both fields match exactly.
+
+[tools.clang]
+realpath = "/absolute/path/to/clang"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.clangxx]
+realpath = "/absolute/path/to/clang++"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.ld_lld]
+realpath = "/absolute/path/to/ld.lld"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.llvm_ar]
+realpath = "/absolute/path/to/llvm-ar"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.llvm_readobj]
+realpath = "/absolute/path/to/llvm-readobj"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.llvm_objdump]
+realpath = "/absolute/path/to/llvm-objdump"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.rustup]
+realpath = "/absolute/path/to/rustup"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.rustc]
+realpath = "/absolute/path/to/pinned/nightly/bin/rustc"
+sha256 = "replace-with-64-lowercase-hex-digest"
+
+[tools.cargo]
+realpath = "/absolute/path/to/pinned/nightly/bin/cargo"
+sha256 = "replace-with-64-lowercase-hex-digest"

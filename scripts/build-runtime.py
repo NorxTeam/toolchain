@@ -16,9 +16,14 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 from build import (  # noqa: E402
     REPO_ROOT,
     TOOLCHAIN_ROOT,
+    atomic_write_text,
+    confined_rootfs,
     checked_output,
     copy_checked,
+    ensure_directory,
+    load_tool_pins,
     load_toml,
+    require_llvm_version,
     run,
     stage_userspace_headers,
     target_emulation,
@@ -48,12 +53,12 @@ def compile_common(target_info: dict, target_name: str, sysroot: Path) -> list[s
 
 
 def compile_source(command: list[str], source: Path, output: Path) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(output.parent)
     run([*command, "-c", str(source), "-o", str(output)])
 
 
 def archive(ar: Path, output: Path, objects: list[Path]) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(output.parent)
     run([str(ar), "rcs", str(output), *(str(object_file) for object_file in objects)])
 
 
@@ -94,27 +99,25 @@ def reject_libm(clang: Path, target_info: dict, target_name: str, sysroot: Path,
     completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if completed.returncode == 0 or "libm is unavailable" not in completed.stderr:
         raise SystemExit("math.h did not fail closed with the expected Norx libm diagnostic")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(completed.stderr, encoding="utf-8")
+    ensure_directory(output.parent)
+    atomic_write_text(output, completed.stderr)
 
 
 def main() -> int:
     versions = load_toml(TOOLCHAIN_ROOT / "versions.toml")
     abi = load_toml(TOOLCHAIN_ROOT / "abi.toml")
+    pins = load_tool_pins()
     llvm_version = versions["llvm_version"]
-    clang = tool_path("clang.exe" if os.name == "nt" else "clang", "NORX_CLANG")
-    clangxx = tool_path("clang++.exe" if os.name == "nt" else "clang++", "NORX_CLANGXX")
-    ld_lld = tool_path("ld.lld.exe" if os.name == "nt" else "ld.lld", "NORX_LD_LLD")
-    ar = tool_path("llvm-ar.exe" if os.name == "nt" else "llvm-ar", "NORX_LLVM_AR")
-    readobj = tool_path(
-        "llvm-readobj.exe" if os.name == "nt" else "llvm-readobj", "NORX_LLVM_READOBJ"
-    )
+    clang = tool_path("clang", "NORX_CLANG", pins)
+    clangxx = tool_path("clangxx", "NORX_CLANGXX", pins)
+    ld_lld = tool_path("ld_lld", "NORX_LD_LLD", pins)
+    ar = tool_path("llvm_ar", "NORX_LLVM_AR", pins)
+    readobj = tool_path("llvm_readobj", "NORX_LLVM_READOBJ", pins)
     for tool in (clang, clangxx, ld_lld, ar, readobj):
-        if llvm_version not in checked_output([str(tool), "--version"]):
-            raise SystemExit(f"{tool} is not pinned to LLVM {llvm_version}")
+        require_llvm_version(tool, llvm_version)
 
     sysroot = TOOLCHAIN_ROOT / "build" / "sysroot"
-    rootfs = Path(os.environ.get("NORX_ROOTFS", REPO_ROOT / "test-rootfs"))
+    rootfs = confined_rootfs(os.environ.get("NORX_ROOTFS"))
     stage_userspace_headers(sysroot, rootfs)
     build_root = TOOLCHAIN_ROOT / "build" / "runtime"
     results: dict[str, dict[str, str]] = {}
@@ -131,6 +134,7 @@ def main() -> int:
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name
+        ensure_directory(target_dir)
         common = compile_common(target_info, target_name, sysroot)
         c_objects: list[Path] = []
         for source in c_sources:
@@ -224,7 +228,7 @@ def main() -> int:
             target_dir / "libm-reject.stderr.txt",
         )
         for artifact in (libc_archive, cxx_archive, c_smoke, cxx_smoke, spawn2_smoke):
-            validate_elf(readobj, artifact) if artifact.suffix == ".elf" else None
+            validate_elf(readobj, artifact, target_info) if artifact.suffix == ".elf" else None
         results[target_name] = {
             "libc_sha256": sha256(libc_archive),
             "cxx_sha256": sha256(cxx_archive),
@@ -236,8 +240,8 @@ def main() -> int:
             destination = rootfs / ("tests/runtime" if artifact.suffix == ".elf" else "usr/lib") / target_info["triple"] / artifact.name
             copy_checked(artifact, destination)
 
-    manifest_dir = rootfs / "var" / "lib" / "runtime"
-    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest_dir = rootfs / "var" / "lib" / "norx-runtime"
+    ensure_directory(manifest_dir)
     lines = [
         'schema = "runtime-build"',
         "version = 1",
@@ -250,7 +254,7 @@ def main() -> int:
     ]
     for target_name, target_results in results.items():
         lines.extend([f"[targets.{target_name}]", *[f'{key} = "{value}"' for key, value in target_results.items()], ""])
-    (manifest_dir / "manifest.toml").write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(manifest_dir / "manifest.toml", "\n".join(lines))
     print(f"runtime build passed; manifest: {manifest_dir / 'manifest.toml'}")
     return 0
 
