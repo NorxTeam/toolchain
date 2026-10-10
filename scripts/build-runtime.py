@@ -130,7 +130,6 @@ def main() -> int:
         REPO_ROOT / "userspace" / "runtime" / "src" / "startup" / "start.c",
     ]
     for target_name, target_info in (
-        ("x86_64", abi["targets"]["x86_64"]),
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name
@@ -186,8 +185,6 @@ def main() -> int:
 
         spawn2_smoke_object = target_dir / "obj" / "spawn2_smoke.o"
         spawn2_compile = [str(clang), *common]
-        if target_name == "x86_64":
-            spawn2_compile.append("-mcmodel=large")
         compile_source(
             [*spawn2_compile, "-std=c11", "-g"],
             REPO_ROOT / "userspace" / "examples" / "spawn2_smoke.c",

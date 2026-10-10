@@ -1,5 +1,13 @@
 # Norx toolchain and SDK assembly
 
+## Native target policy
+
+Native builds, SDK publication, and package recipes support ARM64 only
+(`aarch64-unknown-norx`, kernel `aarch64-unknown-uefi`). Native x86 target specs
+and linker output have been retired. Historical register metadata and upstream
+sources remain available for review; foreign x86 applications belong to WLI
+and do not make x86 a native Norx platform.
+
 This repository owns how Norx userspace is built and released. It is a small,
 reproducible configuration and SDK assembly project, not a fork of a compiler.
 Userspace source code lives in [`../userspace/`](../userspace/); this repository
@@ -114,7 +122,7 @@ every executable through the reviewed host-specific
 [`toolchain-pins.toml`](toolchain-pins.toml.example) policy. Each tool is
 matched by exact realpath and SHA-256 before and during use; `NORX_*` and
 `RUSTC` may only select that already-pinned file. It builds freestanding C and
-Rust fixtures for both custom target specs, links them with the architecture
+Rust fixtures for the native ARM64 target spec, links them with the architecture
 linker scripts, parses their ELF bytes directly for the target machine, ABI,
 segments, entry, W^X, and absent interpreter/dynamic linker, and copies the
 tested binaries plus a hash manifest atomically into
@@ -140,7 +148,7 @@ offline and stages the no-std userspace API fixture under the test rootfs.
 
 The first quickinit bootstrap gate is also separate from the host policy tests.
 Run `python toolchain/scripts/build-quickinit.py` after `build-runtime.py`; it
-builds the freestanding quickinit contract ELF for both targets, validates its
+builds the freestanding quickinit contract ELF for native ARM64, validates its
 `_start` symbol, and stages the artifact plus hashes under the test rootfs.
 This bootstrap only proves the current write/getpid/wait/exit ABI slice; it is
 not yet the full PID1 supervisor handoff.

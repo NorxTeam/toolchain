@@ -56,7 +56,6 @@ def main() -> int:
     results: dict[str, str] = {}
     nsh_results: dict[str, str] = {}
     for target_name, target_info in (
-        ("x86_64", abi["targets"]["x86_64"]),
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name

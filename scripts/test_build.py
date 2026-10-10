@@ -16,7 +16,7 @@ import build  # noqa: E402
 
 
 TARGET = {
-    "machine": "EM_X86_64",
+    "machine": "EM_AARCH64",
     "elf_osabi": 0,
     "elf_flags": 0,
     "page_size": 4096,
@@ -27,7 +27,7 @@ TARGET = {
 
 def image(
     *,
-    machine: int = build.EM_X86_64,
+    machine: int = build.EM_AARCH64,
     flags: int = build.PF_R | build.PF_X,
     entry: int = 0x400000000100,
     second_header: tuple[int, int, int, int, int, int, int, int] | None = None,
@@ -82,12 +82,20 @@ class BuildBoundaryTests(unittest.TestCase):
 
     def test_valid_static_elf_and_target_contract(self) -> None:
         info = build.parse_elf(image(), Path("valid.elf"), TARGET)
-        self.assertEqual(info.machine, build.EM_X86_64)
+        self.assertEqual(info.machine, build.EM_AARCH64)
         self.assertEqual(info.entry, 0x400000000100)
         self.assertIsNone(info.interpreter)
 
+    def test_empty_tls_header_is_optional_but_empty_load_is_rejected(self) -> None:
+        empty = (build.PT_TLS, build.PF_R, 0, 0, 0, 0, 0, 8)
+        build.parse_elf(image(second_header=empty), Path("no-tls.elf"), TARGET)
+        empty_load = (build.PT_LOAD, build.PF_R, 0, 0, 0, 0, 0, 4096)
+        self.assert_rejected(build.parse_elf, image(second_header=empty_load), Path("empty-load.elf"), TARGET)
+        bad_tls = (build.PT_TLS, build.PF_R, 0, 0, 0, 1, 0, 8)
+        self.assert_rejected(build.parse_elf, image(second_header=bad_tls), Path("bad-tls.elf"), TARGET)
+
     def test_elf_rejects_identity_permissions_interpreter_and_entry_errors(self) -> None:
-        self.assert_rejected(build.parse_elf, image(machine=build.EM_AARCH64), Path("bad.elf"), TARGET)
+        self.assert_rejected(build.parse_elf, image(machine=build.EM_X86_64), Path("bad.elf"), TARGET)
         self.assert_rejected(
             build.parse_elf,
             image(flags=build.PF_R | build.PF_W | build.PF_X),

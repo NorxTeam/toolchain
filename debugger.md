@@ -10,7 +10,6 @@ For a graphical local QEMU session, start the machine with the GDB stub and
 the same display policy used by the integration tests:
 
 ```text
-x86_64: qemu-system-x86_64 ... -display gtk -s -S
 aarch64: qemu-system-aarch64 ... -display gtk -device ramfb -gdb tcp::1234 -S
 ```
 

@@ -1,148 +1,41 @@
-# Norx userspace target and ABI definition
+# Native ARM64 ABI scope
 
-Status: Roadmap 5.1.2. The canonical values are in [`abi.toml`](abi.toml).
-This is the userspace ABI; the kernel build targets remain
-`x86_64-unknown-none` and `aarch64-unknown-uefi` and must not be used for
-userland binaries.
+The published native target is `aarch64-unknown-norx`, using AAPCS64 and
+`EM_AARCH64` static ELF64 little-endian executables. The kernel boot target is
+`aarch64-unknown-uefi`; UEFI is a boot artifact format, not a userspace ABI.
+Native x86 SDK output is retired. WLI owns foreign ELF/PE architecture
+classification and translation independently from this native ABI.
 
-## Targets and object format
+The executable ABI and limits are authoritative in `abi.toml`. The versioned
+syscall structures and numbers come from `../userspace/include/norx/syscall.h`
+and the generated Rust wrappers; `../userspace/abi/norx-abi.toml` records the
+shared contract. AArch64 passes the syscall number in `x8`, arguments in
+`x0` through `x5`, and the result in `x0`; errors are negative errno values.
 
-| Userspace target | Kernel target | ELF machine | C ABI | Baseline |
-| --- | --- | --- | --- | --- |
-| `x86_64-unknown-norx` | `x86_64-unknown-none` | `EM_X86_64` | System V AMD64 | x86-64 integer ISA |
-| `aarch64-unknown-norx` | `aarch64-unknown-uefi` | `EM_AARCH64` | AAPCS64 | ARMv8-A integer ISA |
+## Native startup and ownership
 
-Both produce ELF64 little-endian objects with 4 KiB page alignment. The first
-published binaries are statically linked `ET_EXEC` images with
-`ELFOSABI_NONE`, zero ELF flags, no `PT_INTERP`, and no `PT_DYNAMIC`. The
-toolchain publisher parses those fields and every `PT_LOAD` directly from the
-artifact; a textual `llvm-readobj` report is retained for debugging only.
-`ET_DYN`/PIE and shared objects are reserved staged profiles; the relocation
-lists in `abi.toml` are the allowed starting set, not permission to ship a
-dynamic loader before its process and rollback contracts pass.
+The entry symbol is `_start`. Startup uses the versioned bounded block v1
+validated by the Norx C/Rust runtime: magic/version/header size, at most 4096
+bytes, 16 arguments and 16 environment entries, checked offsets, bounded
+terminated strings, and `AT_PAGESZ`/`AT_ENTRY`/`AT_NULL`. It is not an arbitrary
+unbounded POSIX initial stack. Kernel-owned mapped memory remains required;
+validation of a header does not establish pointer accessibility by itself.
 
-## Language calling conventions
+Descriptors belong to the process and are revoked on close or process exit.
+Raw internal VFS/DMA handles do not cross the syscall boundary. ABI versions,
+structure sizes, and reserved-zero fields are checked before consuming input.
 
-The application ABI is the native C ABI for its target. Syscall register
-placement is a separate kernel boundary and must not leak into ordinary C or
-Rust function calls.
+## Compiler and linker constraints
 
-### x86_64 System V AMD64
+`targets/aarch64-unknown-norx.json` selects the freestanding target and
+`linker/aarch64-norx.ld` lays out separate executable and writable segments.
+Use 16-byte stack alignment, reserve `x18`, and disable floating point until
+FPU context switching is implemented. Integer atomics use the ARMv8 baseline.
+TLS and dynamic linking remain staged and require their own runtime evidence.
 
-- Integer and pointer arguments use `RDI, RSI, RDX, RCX, R8, R9`; integer and
-  pointer results use `RAX`.
-- `RSP` is 16-byte aligned at a call boundary. The 128-byte red zone is
-  available to user code and is not used by the kernel entry path.
-- `RBX, RBP, and R12-R15` are callee-saved. The first profile does not expose
-  floating-point or vector arguments because process FPU ownership is not yet
-  implemented.
-
-### AArch64 AAPCS64
-
-- The first eight integer and pointer arguments use `X0-X7`; results use
-  `X0`. `X19-X28`, `X29` (frame pointer), and `X30` (link register) follow
-  the AAPCS64 preservation rules.
-- `SP` is always 16-byte aligned at a public call boundary. There is no red
-  zone. `X18` is reserved as the platform register and is not allocatable by
-  Norx code.
-- Floating-point/SIMD arguments are excluded from the initial profile until
-  the scheduler and user entry path save and restore that state.
-
-## Syscall ABI v2
-
-The published boundary is `NORX_ABI_VERSION == 2` in
-`userspace/include/norx/syscall.h` and `src/syscall.rs`:
-
-- every call has a 64-bit number, six 64-bit logical argument words, and a
-  64-bit result;
-- x86_64 uses `RAX` for the number/result and
-  `RDI, RSI, RDX, R10, R8, R9` for arguments through the `syscall` instruction;
-- AArch64 uses `X8` for the number and `X0-X5` for arguments/result through
-  `SVC #0`;
-- success returns a non-negative word; failure returns the unsigned
-  two's-complement representation of `-errno` (currently errors are bounded
-  to the Linux-compatible range below 4096);
-- `read` and `write` are bounded process-owned user-buffer operations. `read`
-  currently polls the nonblocking serial console for fd 0 and returns
-  `-EAGAIN` when no byte is available; `write` sends fd 1/2 through the
-  kernel console. They must not fall back to host I/O.
-- v2 retains the v1 process-I/O extension calls `open`, `pipe`, `dup2`,
-  `wait_status`, `spawn2`, process-group control, and serial-TTY foreground
-  control, and adds bounded `mkdir`, `rmdir`, `unlink`, `rename`, `link`,
-  `stat`, and `read_dir` calls. `spawn2` copies bounded UTF-8 argv and
-  environment vectors into the child startup stack. Directory entries and
-  metadata are fixed-size, regular-file/directory-only records; symlink nodes,
-  locale collation, and host filesystem fallback are not implied.
-
-`Args` is `#[repr(C)]`, 48 bytes, 8-byte aligned. `Timespec` is two signed
-64-bit fields, 16 bytes, with no hidden padding contract beyond the C layout.
-Unknown numbers, invalid descriptors, invalid child/wait state, and invalid
-user ranges use the typed errno mapping documented in `syscall-abi.md`.
-
-## Startup and termination
-
-Every target uses a Norx-owned freestanding `_start`, never host `crt1` or a
-host process startup object. The loader provides a 16-byte-aligned initial
-stack containing:
-
-```text
-argc, argv[argc], NULL, envp[], NULL,
-AT_PAGESZ, page_size, AT_ENTRY, entry, AT_NULL, 0
-```
-
-The startup object normalizes that stack into the language runtime, calls the
-application entry point, and terminates through `norx_exit(status)`. The
-current architecture register image is intentionally explicit: x86_64 reads
-the stack at `RSP`; AArch64 enters with `X0=argc`, `X1=argv`, and `X2=envp`.
-Panics and uncaught failures abort; no host exit, signal, or console fallback
-is allowed.
-
-## Linker and relocation contract
-
-Userland gets architecture-local scripts
-`linker/x86_64-norx.ld` and `linker/aarch64-norx.ld` assembled by the
-toolchain project. They are separate from the kernel's
-`norx-kernel/linker/x86_64.ld`. The first scripts must:
-
-- emit `.text`, `.rodata`, `.data`, `.bss`, `.tdata`, and `.tbss` in that
-  order with page-aligned load segments;
-- keep code non-writable and data non-executable; reject W+X PT_LOAD output;
-- retain the entry symbol `_start` and discard host comments/unwind metadata
-  unless the selected runtime explicitly owns it;
-- use a fixed static image base for `ET_EXEC`; PIE load bias must be a 4 KiB
-  multiple and remain below the architecture's `USER_LIMIT`.
-
-The static relocation sets are intentionally small and architecture-specific:
-x86_64 starts with absolute and PC-relative 64-bit/32-bit relocations plus
-`PLT32`; AArch64 starts with page-relative `ADR_PREL_PG_HI21`, low-12-bit add,
-absolute-64, call, and jump relocations. `RELATIVE`, `GLOB_DAT`, `JUMP_SLOT`,
-and the listed TLS relocations are staged dynamic-linker work.
-
-## TLS, atomics, and floating point
-
-- TLS uses static TLS first: x86_64 uses the `FS` base and AArch64 uses
-  `TPIDR_EL0`. Dynamic TLS relocation forms are reserved, and thread creation
-  cannot claim a complete TLS ABI before process context ownership exists.
-- Integer atomics are required up to 64 bits. x86_64 uses locked integer
-  operations; AArch64 uses ARMv8 LL/SC. 128-bit atomics, lock-free guarantees
-  beyond that set, and device memory atomics are not part of v2.
-- The initial userland profile has no compiler-generated MMX/SSE/AVX or
-  FP/NEON state. C builds use the target's general-register-only profile and
-  Rust builds disable the corresponding target features. A later hard-float
-  profile must first define lazy FPU ownership, signal/register save rules,
-  and a new compatibility gate.
-
-## Compatibility and validation
-
-The definition is intentionally narrower than Linux: no glibc, musl, POSIX,
-WASI, C++ exceptions, or host-path compatibility is implied. A target or
-runtime change must update `abi.toml`, the public C header, the Rust syscall
-contract, and the corresponding negative/boot smoke before changing
-`ABI_VERSION` or marking the toolchain gate complete.
-
-The current kernel self-checks verify the syscall register boundary, pointer
-validation, ELF stack layout, W+X rejection, and both architecture entry
-wrappers. `toolchain/scripts/build.py` additionally rejects malformed or
-oversized ELF files, wrong machine/ABI/address bounds, overlapping or
-misaligned segments, non-file-backed entries, W+X load or executable-stack
-requests, interpreters, and dynamic segments on both targets.
+Build tools must match reviewed exact realpaths/digests and version pins.
+The ELF validator checks machine, ABI, entry, load segments, bounds, W^X,
+interpreter absence, and dynamic segments before publishing output atomically
+into a confined sysroot/rootfs. Reproducible host checks are evidence about
+those build boundaries; target execution and security release gates remain
+separate.

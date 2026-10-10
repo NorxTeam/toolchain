@@ -94,7 +94,7 @@ the only place where the generated sysroot is assembled.
 
 Release acceptance:
 
-- both target triples build;
+- the native ARM64 target builds;
 - ELF headers and `_start` are validated;
 - no host header or CRT is used;
 - `check_boundaries.py` reports no tracked `build/` or `sysroot/` path and the
@@ -190,7 +190,6 @@ python toolchain/scripts/check_boundaries.py --require-sdk
 ```
 
 Then verify the target/QEMU smoke gates and archive hashes. A release hand-off
-is complete only when all commands succeed for both `x86_64-unknown-norx` and
-`aarch64-unknown-norx`, the SDK `abi_version` matches the consumer contract,
+is complete only when all commands succeed for the native `aarch64-unknown-norx` target, the SDK `abi_version` matches the consumer contract,
 and the generated artifacts are retained as evidence rather than committed
 into a source repository.

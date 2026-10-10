@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the freestanding quickinit bootstrap ELF for both target architectures."""
+"""Build the freestanding quickinit bootstrap ELF for the native ARM64 architecture."""
 
 from __future__ import annotations
 
@@ -53,7 +53,6 @@ def main() -> int:
     rootfs = confined_rootfs(os.environ.get("NORX_ROOTFS"))
     results: dict[str, str] = {}
     for target_name, target_info in (
-        ("x86_64", abi["targets"]["x86_64"]),
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         target_dir = build_root / target_name

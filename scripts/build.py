@@ -620,7 +620,9 @@ def parse_elf(data: bytes, artifact: Path, target_info: dict | None = None) -> E
         file_end = file_offset + file_size
         if file_end < file_offset or file_end > len(data) or file_size > memory_size:
             raise SystemExit(f"{artifact} has an invalid program-header file range")
-        if segment_type in (PT_LOAD, PT_TLS) and memory_size == 0:
+        # lld emits an empty PT_TLS when the shared script has no TLS input.
+        # The file-size check above requires this harmless header to be empty.
+        if segment_type == PT_LOAD and memory_size == 0:
             raise SystemExit(f"{artifact} has an empty loadable segment")
         if segment_type == PT_LOAD:
             if segment_flags & ~0x7 or not segment_flags & PF_R or segment_flags & PF_W and segment_flags & PF_X:
@@ -771,15 +773,13 @@ def require_rust_version(tool: list[str], versions: dict) -> str:
 
 
 def target_flags(target_name: str) -> list[str]:
-    if target_name == "x86_64":
-        return ["-mno-mmx", "-mno-sse", "-mno-sse2", "-mno-avx", "-mno-avx2"]
     if target_name == "aarch64":
         return ["-mgeneral-regs-only"]
     raise SystemExit(f"unsupported Norx target: {target_name}")
 
 
 def target_emulation(target_name: str) -> str:
-    return {"x86_64": "elf_x86_64", "aarch64": "aarch64elf"}[target_name]
+    return {"aarch64": "aarch64elf"}[target_name]
 
 
 def build_target(
@@ -940,7 +940,6 @@ def main() -> int:
     ensure_directory(output_root)
     results = {}
     for target_name, target_info in (
-        ("x86_64", abi["targets"]["x86_64"]),
         ("aarch64", abi["targets"]["aarch64"]),
     ):
         results[target_name] = build_target(

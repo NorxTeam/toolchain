@@ -24,35 +24,8 @@ entry_symbol = "_start"
 source = "norx-owned-freestanding-crt0"
 panic_policy = "abort"
 termination = "norx_exit"
-initial_stack = "argc-argv-envp-auxv"
+initial_stack = "bounded-startup-block-v1"
 auxv = ["AT_PAGESZ", "AT_ENTRY", "AT_NULL"]
-
-[targets.x86_64]
-triple = "x86_64-unknown-norx"
-kernel_triple = "x86_64-unknown-none"
-machine = "EM_X86_64"
-elf_type = "ET_EXEC"
-elf_osabi = 0
-elf_flags = 0
-interpreter = "none"
-image_base = 0x400000000000
-user_limit = 0x0000800000000000
-max_load_segments = 16
-max_load_pages = 256
-calling_convention = "sysv_amd64"
-stack_alignment = 16
-red_zone = true
-callee_saved = ["rbx", "rbp", "r12", "r13", "r14", "r15"]
-tls_register = "fs_base"
-tls_model = "static_tls_reserved_dynamic_tls_staged"
-atomics = "lock_prefix_integer_64bit_no_128bit_requirement"
-floating_point = "disabled_until_fpu_context_switch"
-isa_baseline = "x86-64"
-feature_policy = "no_mmx_sse_sse2_avx_generation"
-linker_script = "linker/x86_64-norx.ld"
-static_relocations = ["R_X86_64_64", "R_X86_64_PC32", "R_X86_64_PLT32", "R_X86_64_32S"]
-dynamic_relocations_staged = ["R_X86_64_RELATIVE", "R_X86_64_GLOB_DAT", "R_X86_64_JUMP_SLOT"]
-tls_relocations_staged = ["R_X86_64_DTPMOD64", "R_X86_64_DTPOFF64", "R_X86_64_TPOFF64"]
 
 [targets.aarch64]
 triple = "aarch64-unknown-norx"
